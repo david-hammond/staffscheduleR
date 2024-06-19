@@ -98,3 +98,6 @@ datamodel %>% dm_flatten_to_tbl(timesheet, .recursive = T) %>%
   group_by(project_id, week) %>%
   summarise(spent = sum(spent)) %>%
   ungroup()
+#want a planned alue = burndown
+#want a actual cost per week
+#want an earned value based on progress

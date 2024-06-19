@@ -237,7 +237,7 @@ loading_plot = function(data){
     labs(                         x = "",
                                   y = "Days Assigned",
                                   fill = "") +
-    theme_minimal() + ylim(c(0, 10)) +
+    theme_minimal() + ylim(c(0, max(data$loading)+1)) +
     theme(legend.position = c(0.9,0.8))
 }
 
