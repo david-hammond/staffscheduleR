@@ -1,43 +1,62 @@
+#' Get linearly scaled variable based on optimal bins
+#'
+#' Finds outliers and then bands between 0 and 1 on optimal bins of
+#' non-outlier data
+#' @importFrom R6 R6Class
+#' @importFrom dplyr mutate left_join group_by ungroup filter summarise relocate distinct
+#' @importFrom scales dollar
+#' @importFrom readr parse_number
+#' @importFrom rlang .data
+#' @importFrom data.tree as.Node SetFormat FormatPercent FormatFixedDecimal
+#' @importFrom dm decompose_table dm dm_add_pk dm_add_fk dm_flatten_to_tbl dm_draw copy_dm_to
+#' @importFrom lpSolve lp
+#' @importFrom lubridate today floor_date
+#' @importFrom ggplot2 ggplot labs geom_tile theme_light theme geom_text scale_color_brewer scale_fill_gradientn
+#' @importFrom RColorBrewer brewer.pal
+#'
+#' @export
+#'
+
 schedule = function(data){
 
   data_model = data %>%
     arrange(constant_load) %>%
     mutate(project = factor(project, unique(project), ordered = T)) %>%
-    group_by(project, wp, num_days, constant_load) %>%
-    summarise(start_date = min(start_date),
-              deadline = max(deadline),
-              num_days = sum(num_days)) %>%
+    group_by(project, phase, days_left, constant_load) %>%
+    summarise(start = min(start),
+              due = max(due),
+              days_left = sum(days_left)) %>%
     ungroup() %>%
-    arrange(start_date) %>%
-    decompose_table(id, project, wp, num_days, constant_load)
+    arrange(start) %>%
+    decompose_table(id, project, phase, days_left, constant_load)
 
   schedule = gantt_matrix(data_model$child_table)
-  schedule = schedule %>% left_join(data_model$parent_table %>% select(id, num_days, constant_load), by = "id") %>%
-    relocate(id, constant_load, num_days)
+  schedule = schedule %>% left_join(data_model$parent_table %>% select(id, days_left, constant_load), by = "id") %>%
+    relocate(id, constant_load, days_left)
   schedule = create_gantt_matrix(schedule)
   optsoln = schedule
 
   schedule$flat_gantt = schedule$gantt %>% gather(week, loading, -c(id)) %>%
     mutate(week = as.Date(week)) %>%
     filter(loading > 0) %>%
-    left_join(data_model$parent_table %>% select(id, constant_load, project, wp), by = "id") %>%
+    left_join(data_model$parent_table %>% select(id, constant_load, project, phase), by = "id") %>%
     select(-id) %>%
-    relocate(project, wp, constant_load) %>%
+    relocate(project, phase, constant_load) %>%
     arrange(constant_load, project)
 
   schedule$loading_table = schedule$flat_gantt
   loading_chart = loading_plot(schedule)
-  p = data %>% select(-wp) %>%
-    rename(wp = project) %>%
-    group_by(wp, activity) %>%
-    summarise(start_date = min(start_date),
-              deadline = max(deadline),
-              progress = sum(progress*num_days)/sum(num_days)) %>% ungroup() %>%
+  p = data %>% select(-phase) %>%
+    rename(phase = project) %>%
+    group_by(phase, activity) %>%
+    summarise(start = min(start),
+              due = max(due),
+              progress = sum(progress*days_left)/sum(days_left)) %>% ungroup() %>%
     mutate(activity = make.unique(activity)) %>%
 
-    mutate(wp = factor(wp, unique(wp), ordered = T)) %>%
-    select(wp, activity, start_date, deadline, progress) %>%
-    arrange(wp, start_date)
+    mutate(phase = factor(phase, unique(phase), ordered = T)) %>%
+    select(phase, activity, start, due, progress) %>%
+    arrange(phase, start)
   schedule$gantt = get_gantt(p)
   return(schedule)
 }
@@ -47,7 +66,7 @@ gantt_matrix = function(data){
   planning_horizon = 12
   expanded_data <- data %>%
     rowwise() %>%
-    mutate(week_sequence = list(seq.Date(floor_date(as.Date(start_date), "week"), ceiling_date(as.Date(deadline), "week") - 1, by = "week"))) %>%
+    mutate(week_sequence = list(seq.Date(floor_date(as.Date(start), "week"), ceiling_date(as.Date(due), "week") - 1, by = "week"))) %>%
     unnest(week_sequence) %>%
     select(id, week_sequence) %>%
     distinct() %>%
@@ -99,7 +118,7 @@ rbind_with_padding = function(mat1, mat2) {
 
 create_gantt_matrix = function(schedule) {
   timeframes = schedule %>% select(-c(1:3)) %>% as.matrix()
-  row_sums = schedule$num_days
+  row_sums = schedule$days_left
   # Replace NA values with 0
   timeframes[is.na(timeframes)] <- 0
 
@@ -148,7 +167,7 @@ create_gantt_matrix = function(schedule) {
     tmp = schedule
     for (i in 1:nrow(tmp)){
       if(tmp$constant_load[i]){
-        tmp[i,-c(1:3)] = t(rep(tmp$num_days[i]/sum(tmp[i,-c(1:3)]), ncol(tmp[i,-c(1:3)])))
+        tmp[i,-c(1:3)] = t(rep(tmp$days_left[i]/sum(tmp[i,-c(1:3)]), ncol(tmp[i,-c(1:3)])))
       }else{
         tmp[i,-c(1:3)] = t(rep(0, ncol(tmp[i,-c(1:3)])))
       }
@@ -225,12 +244,12 @@ loading_plot = function(data){
 get_gantt = function(y){
   require(plan)
   g <- new("gantt")
-  y = y %>% arrange((start_date))
-  y = split(y, factor(y$wp, unique(y$wp), ordered = T))
+  y = y %>% arrange((start))
+  y = split(y, factor(y$phase, unique(y$phase), ordered = T))
   for (i in y){
-    g <- ganttAddTask(g, as.character(i$wp[1]))
+    g <- ganttAddTask(g, as.character(i$phase[1]))
     for(j in 1:nrow(i)){
-      g <- ganttAddTask(g, i$activity[j], as.character(i$start_date[j]),  as.character(i$deadline[j] + 1),
+      g <- ganttAddTask(g, i$activity[j], as.character(i$start[j]),  as.character(i$due[j] + 1),
                         done = i$progress[j])
     }
 
