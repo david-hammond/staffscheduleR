@@ -45,13 +45,13 @@ schedule = function(data){
     arrange(constant_load, project)
 
   schedule$loading_table = schedule$flat_gantt
-  loading_chart = loading_plot(schedule)
+  schedule$loading_chart = loading_plot(schedule)
   p = data %>% select(-phase) %>%
     rename(phase = project) %>%
     group_by(phase, activity) %>%
     summarise(start = min(start),
               due = max(due),
-              progress = sum(progress*days_left)/sum(days_left)) %>% ungroup() %>%
+              progress = sum(progress*total_days)/sum(total_days)) %>% ungroup() %>%
     mutate(activity = make.unique(activity)) %>%
 
     mutate(phase = factor(phase, unique(phase), ordered = T)) %>%
@@ -249,8 +249,8 @@ get_gantt = function(y){
   for (i in y){
     g <- ganttAddTask(g, as.character(i$phase[1]))
     for(j in 1:nrow(i)){
-      g <- ganttAddTask(g, i$activity[j], as.character(i$start[j]),  as.character(i$due[j] + 1),
-                        done = i$progress[j])
+      g <- ganttAddTask(g, i$activity[j], as.character(i$start[j]),  as.character(i$due[j]),
+                        done = 100*i$progress[j])
     }
 
   }
