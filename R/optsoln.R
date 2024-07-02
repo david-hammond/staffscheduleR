@@ -38,7 +38,7 @@ schedule = function(data){
 
   schedule$flat_gantt = schedule$gantt %>% gather(week, loading, -c(id)) %>%
     mutate(week = as.Date(week)) %>%
-    filter(loading > 0) %>%
+    #filter(loading > 0) %>%
     left_join(data_model$parent_table %>% select(id, constant_load, project, phase), by = "id") %>%
     select(-id) %>%
     relocate(project, phase, constant_load) %>%
