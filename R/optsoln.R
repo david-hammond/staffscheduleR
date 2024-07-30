@@ -22,13 +22,13 @@ schedule = function(data){
   data_model = data %>%
     arrange(constant_load) %>%
     mutate(project = factor(project, unique(project), ordered = T)) %>%
-    group_by(project, phase, days_left, constant_load) %>%
-    summarise(start = min(start),
-              due = max(due),
-              days_left = sum(days_left)) %>%
-    ungroup() %>%
+    # group_by(project, phase, activity, days_left, constant_load) %>%
+    # summarise(start = min(start),
+    #           due = max(due),
+    #           days_left = sum(days_left)) %>%
+    # ungroup() %>%
     arrange(start) %>%
-    decompose_table(id, project, phase, days_left, constant_load)
+    decompose_table(id, project, phase, activity, days_left, constant_load)
 
   schedule = gantt_matrix(data_model$child_table)
   schedule = schedule %>% left_join(data_model$parent_table %>% select(id, days_left, constant_load), by = "id") %>%
